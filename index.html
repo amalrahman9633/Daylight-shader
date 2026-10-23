@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Daylight</title>
+    <meta name="description" content="Free, open-source animated light and shadow backgrounds." />
+    <script>
+      // Apply the saved light/dark choice before first paint, so there's no flash.
+      try {
+        const t = localStorage.getItem('daylight-theme');
+        if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch {}
+    </script>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <main class="stage">
+        <div class="viewport">
+          <div class="frame" id="frame">
+            <canvas id="canvas" aria-label="Animated light and shadow preview"></canvas>
+            <p class="stage-message" id="stage-message" role="status" hidden></p>
+            <div class="drop-hint" aria-hidden="true">Drop an image to use it as your shadow</div>
+          </div>
+        </div>
+        <div class="bar" id="bar"></div>
+      </main>
+
+      <aside class="sidebar" id="sidebar" aria-label="Settings">
+        <button class="sheet-handle" id="sheet-handle" type="button" aria-expanded="false" aria-controls="sheet-body">
+          <span class="sheet-grip" aria-hidden="true"></span>
+          <span class="sheet-label">Adjust</span>
+        </button>
+        <header class="sidebar-header">
+          <h1 class="wordmark">Daylight</h1>
+          <button class="icon-button" id="theme-toggle" type="button"></button>
+        </header>
+        <div id="presets"></div>
+        <div class="sheet-body" id="sheet-body">
+          <section class="custom" id="custom" aria-labelledby="custom-title" hidden></section>
+          <div id="controls"></div>
+          <section class="export" id="export" aria-labelledby="export-title"></section>
+          <section class="code" id="code" aria-labelledby="code-title"></section>
+        </div>
+      </aside>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "daylight",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "player": "vite build --config vite.player.config.ts --logLevel warn",
+    "predev": "npm run player",
+    "dev": "vite",
+    "prebuild": "npm run player",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}

@@ -1,0 +1,803 @@
+/* ---------- Tokens ---------- */
+
+/* Lets the frame animate smoothly between aspect ratios. */
+@property --ratio {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1.7778;
+}
+
+:root {
+  --ratio: 1.7778;
+  --canvas-bg: #f7f5f0;
+  --sidebar-width: 300px;
+  --sheet-peek: 112px;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  --app-bg: #ebe9e4;
+  --surface: #f8f7f4;
+  --ink: #2a2724;
+  --ink-soft: #736d65;
+  --line: rgba(42, 39, 36, 0.1);
+  --line-strong: rgba(42, 39, 36, 0.18);
+  --control: rgba(255, 255, 255, 0.7);
+  --control-hover: #ffffff;
+  --accent: #2a2724;
+  --accent-ink: #faf9f6;
+  --frame-shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 18px 48px -18px rgba(40, 32, 20, 0.28);
+
+  color-scheme: light;
+  transition: --ratio 0.45s var(--ease-out);
+}
+
+/* Dark interface: when the system asks for it (unless you picked light), or when picked. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --app-bg: #121110;
+    --surface: #1b1a18;
+    --ink: #ece9e3;
+    --ink-soft: #9a948b;
+    --line: rgba(236, 233, 227, 0.09);
+    --line-strong: rgba(236, 233, 227, 0.18);
+    --control: rgba(255, 255, 255, 0.04);
+    --control-hover: rgba(255, 255, 255, 0.08);
+    --accent: #ece9e3;
+    --accent-ink: #1b1a18;
+    --frame-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 48px -18px rgba(0, 0, 0, 0.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --app-bg: #121110;
+  --surface: #1b1a18;
+  --ink: #ece9e3;
+  --ink-soft: #9a948b;
+  --line: rgba(236, 233, 227, 0.09);
+  --line-strong: rgba(236, 233, 227, 0.18);
+  --control: rgba(255, 255, 255, 0.04);
+  --control-hover: rgba(255, 255, 255, 0.08);
+  --accent: #ece9e3;
+  --accent-ink: #1b1a18;
+  --frame-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 48px -18px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    transition: none;
+  }
+}
+
+/* ---------- Base ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--app-bg);
+  color: var(--ink);
+  font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ---------- Layout: canvas left, sidebar right ---------- */
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+  height: 100dvh;
+}
+
+.stage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The viewport measures the space available; the frame fits inside it at the
+   chosen aspect ratio, as large as possible. */
+.viewport {
+  flex: 1;
+  min-height: 0;
+  padding: 32px 32px 0;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
+
+.frame {
+  position: relative;
+  width: min(100cqw, 100cqh * var(--ratio));
+  aspect-ratio: var(--ratio);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--canvas-bg);
+  box-shadow: var(--frame-shadow);
+}
+
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.stage-message {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: fit-content;
+  max-width: min(36ch, calc(100% - 32px));
+  height: fit-content;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.85);
+  color: #3d3a35;
+  text-align: center;
+  line-height: 1.5;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* ---------- Bottom bar ---------- */
+
+.bar {
+  height: 64px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.icon-button:hover {
+  background: var(--control-hover);
+}
+.play {
+  border-color: var(--line);
+  background: var(--control);
+}
+
+.segmented {
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--control);
+}
+.segmented button {
+  min-width: 44px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.segmented button:hover {
+  color: var(--ink);
+}
+.segmented button[aria-checked='true'] {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---------- Sidebar ---------- */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 28px;
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  flex-shrink: 0;
+}
+
+.wordmark {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.sheet-handle {
+  display: none;
+}
+
+.section-title,
+.group-title {
+  margin: 0;
+  padding: 14px 0 10px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* ---------- Presets ---------- */
+
+.presets {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.preset,
+.surprise,
+.share-button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--control);
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+.preset:hover,
+.surprise:hover,
+.share-button:hover {
+  background: var(--control-hover);
+  border-color: var(--line-strong);
+}
+.preset:active,
+.surprise:active,
+.share-button:active {
+  transform: scale(0.98);
+}
+
+.preset {
+  padding: 9px 10px;
+  text-align: left;
+  line-height: 1.25;
+}
+.preset[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.surprise {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px;
+  color: var(--ink-soft);
+}
+
+/* "Your own": a dashed invitation until there's an upload. */
+.preset-own {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-style: dashed;
+  color: var(--ink-soft);
+}
+.preset-own.has-upload {
+  justify-content: flex-start;
+  border-style: solid;
+  color: var(--ink);
+}
+.preset-own[aria-pressed='true'] {
+  color: var(--accent-ink);
+}
+.own-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.upload-error {
+  margin: 8px 0 0;
+  color: #b4442f;
+}
+.upload-error:empty {
+  display: none;
+}
+
+/* ---------- Custom shadow panel ---------- */
+
+.custom {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.custom-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.custom-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.custom-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-button {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+}
+.text-button:hover {
+  color: var(--ink);
+  background: var(--control-hover);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.field-label {
+  color: var(--ink);
+}
+.field-hint {
+  margin: -6px 0 12px;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  cursor: pointer;
+}
+
+/* A small on/off switch built from a checkbox. */
+.switch {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--line-strong);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s var(--ease-out);
+}
+.switch:checked {
+  background: var(--accent);
+}
+.switch:checked::after {
+  transform: translateX(12px);
+}
+
+.custom-warning {
+  margin: 8px 0 0;
+  color: #a5642a;
+}
+.custom-warning:empty {
+  display: none;
+}
+
+/* Drag an image over the page: the preview invites the drop. */
+.drop-hint {
+  position: absolute;
+  inset: 12px;
+  display: grid;
+  place-items: center;
+  border: 1.5px dashed rgba(42, 39, 36, 0.35);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.55);
+  color: #3d3a35;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.frame.dropping .drop-hint {
+  opacity: 1;
+}
+
+/* ---------- Controls ---------- */
+
+.group {
+  border-bottom: 1px solid var(--line);
+}
+
+.group-title {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 4px;
+}
+.group-title::-webkit-details-marker {
+  display: none;
+}
+.group-title::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.2s ease;
+}
+.group:not([open]) .group-title::after {
+  transform: rotate(-45deg);
+}
+
+.control {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  row-gap: 6px;
+  padding-bottom: 14px;
+}
+
+.control-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+/* Range slider: thin track filled up to the thumb, small round thumb. */
+.control input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.control input[type='range']::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--fill, 0%), var(--line-strong) var(--fill, 0%));
+}
+.control input[type='range']::-moz-range-track {
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent) var(--fill, 0%), var(--line-strong) var(--fill, 0%));
+}
+.control input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  transition: transform 0.15s ease;
+}
+.control input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+}
+.control input[type='range']:hover::-webkit-slider-thumb,
+.control input[type='range']:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+.control input[type='range']:focus-visible {
+  outline-offset: 4px;
+}
+
+/* Color: hex value beside a round swatch. */
+.control-color {
+  grid-template-columns: 1fr auto auto;
+  column-gap: 8px;
+}
+.control input[type='color'] {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+.control input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.control input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+.control input[type='color']::-moz-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+
+/* ---------- Export ---------- */
+
+.export {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.segmented-full {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.segmented button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.export-size {
+  margin: 8px 0 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.primary-button:hover {
+  opacity: 0.88;
+}
+.primary-button:active {
+  transform: scale(0.98);
+}
+.primary-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.export-status:empty {
+  display: none;
+}
+
+.coming-soon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  color: var(--ink-soft);
+}
+
+.badge {
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+/* ---------- Use on your website ---------- */
+
+.code .share-button {
+  width: 100%;
+}
+.code .export-status {
+  margin: 8px 0 0;
+}
+
+.share-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  text-align: left;
+}
+.share-button.copied {
+  border-color: var(--line-strong);
+}
+
+.hint {
+  margin: 10px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ---------- Mobile: canvas on top, controls in a bottom sheet ---------- */
+
+@media (max-width: 760px) {
+  .app {
+    display: block;
+  }
+
+  .stage {
+    position: fixed;
+    inset: 0 0 auto;
+    height: calc(100dvh - var(--sheet-peek));
+  }
+
+  /* Canvas full-bleed at the top, bar directly under it. The frame is as wide
+     as the screen unless that would push the bar under the sheet. */
+  .viewport {
+    flex: none;
+    padding: 0;
+    container-type: normal;
+    display: block;
+  }
+
+  .frame {
+    width: min(100vw, (100dvh - var(--sheet-peek) - 52px) * var(--ratio));
+    margin: 0 auto;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .bar {
+    height: 52px;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    max-height: 80dvh;
+    padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    /* Collapsed: only the handle and the preset row peek out. */
+    transform: translateY(calc(100% - var(--sheet-peek)));
+    transition: transform 0.35s var(--ease-out);
+  }
+  .sidebar.expanded {
+    transform: none;
+    overflow-y: auto;
+  }
+
+  .sheet-handle {
+    order: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    width: calc(100% + 32px);
+    margin: 0 -16px;
+    padding: 8px 0 6px;
+    border: 0;
+    background: none;
+    color: var(--ink-soft);
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .sheet-grip {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--line-strong);
+  }
+
+  #presets {
+    order: 1;
+  }
+  .sidebar-header {
+    order: 2;
+    height: 48px;
+  }
+  .sheet-body {
+    order: 3;
+  }
+
+  /* Presets become one horizontal scroller. */
+  .presets {
+    display: flex;
+    gap: 6px;
+    margin: 0 -16px;
+    padding: 4px 16px 14px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 16px;
+    scrollbar-width: none;
+    border-bottom: 0;
+  }
+  .presets::-webkit-scrollbar {
+    display: none;
+  }
+  .preset-grid {
+    display: contents;
+  }
+  .preset,
+  .surprise {
+    flex: 0 0 auto;
+    width: auto;
+    margin: 0;
+    padding: 10px 14px;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
+}
