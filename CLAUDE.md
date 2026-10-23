@@ -24,11 +24,12 @@ Included:
 - Custom shadow uploads: the user's image is converted to a mask in the browser, with three motion styles (Sway, Drift, Still), threshold and invert. Added by the owner on 2026-10-23.
 - "Copy code": one self-contained snippet (player + mask images inline) that works on any website with no hosting, for presets and custom uploads alike
 - Light/dark UI toggle
-- A landing section with looping example previews, and a README
+- A README
 
 Not in v1 (do not build, even if easy):
 - Video export (planned for v1.1, show as "Coming soon")
 - Accounts, cloud saving, public gallery
+- A landing page or landing section (dropped by the owner on 2026-10-23)
 - Shareable links / URL-stored settings (removed by the owner on 2026-10-23; "Copy code" replaces sharing)
 - More than the 4 presets above
 
@@ -108,6 +109,6 @@ daylight/
 
 A full-screen canvas with an off-white background and `branch.png` as a soft shadow (opacity about 0.35, blur in the shader) with a slow wind sway. No UI yet. Run the dev server and describe what I should see. After I approve the look, we add sliders, then presets, then the UI, then export, then sharing, then the landing page and README.
 
-Current focus (owner's decision, 2026-10-23): finish custom uploads and "Copy code" before the landing section and README.
+Current focus (owner's decision, 2026-10-23): custom uploads and "Copy code" are done; the landing page was dropped. Next is the README.
 
 Keep a `TODO.md` updated with what is done and what is next, so a fresh session can pick up easily.

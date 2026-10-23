@@ -119,8 +119,8 @@ export interface Renderer {
   renderStill(width: number, height: number): ImageData;
   /** Use a new custom mask + scene. Crossfades if the custom look is showing. */
   setCustom(mask: MaskPixels | TexImageSource, scene: SceneConfig): void;
-  /** Update the custom scene's threshold instantly (no crossfade). */
-  setCustomLevels(levels: [number, number]): void;
+  /** Replace the custom mask's pixels in place (same size), no crossfade. */
+  updateCustomMask(mask: MaskPixels): void;
   /** Forget the custom mask (after the UI has moved off it). */
   clearCustom(): void;
 }
@@ -403,12 +403,13 @@ export function createRenderer({
     sweepRetired();
   }
 
-  function setCustomLevels(levels: [number, number]) {
-    if (!customScene) return;
-    customScene.layers.forEach((l) => (l.levels = levels));
-    slots.forEach((slot, index) => {
-      if (slot?.scene === customScene) bindSlot(index);
-    });
+  function updateCustomMask(mask: MaskPixels) {
+    if (!customTexture) return;
+    gl.activeTexture(UPLOAD_UNIT);
+    gl.bindTexture(gl.TEXTURE_2D, customTexture);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, mask.width, mask.height, gl.RED, gl.UNSIGNED_BYTE, mask.data);
+    gl.generateMipmap(gl.TEXTURE_2D);
     requestFrame();
   }
 
@@ -645,7 +646,7 @@ export function createRenderer({
     maxExportSize: Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE), dims[0], dims[1]),
     renderStill,
     setCustom,
-    setCustomLevels,
+    updateCustomMask,
     clearCustom,
   };
 }

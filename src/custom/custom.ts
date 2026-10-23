@@ -7,10 +7,12 @@ import { createStore, type Store } from '../state';
 import { transitionTo } from '../transition';
 import {
   autoThreshold,
+  bakeThreshold,
   coverage,
   decodeFile,
   detectLayout,
   histogram,
+  likeliestStem,
   MaskError,
   maskPreview,
   rawMask,
@@ -54,27 +56,48 @@ const empty: CustomState = {
   error: '',
 };
 
-/** Soft edge around the threshold, so photos don't get jagged outlines. */
-const EDGE_SOFTNESS = 0.06;
-
-const levelsFor = (threshold: number): [number, number] => {
-  const t = threshold / 100;
-  return [t - EDGE_SOFTNESS, t + EDGE_SOFTNESS];
-};
-
-/** How far outside the mask the sway pivot sits, like a trunk out of frame. */
+/** How far beyond the shape the sway pivot sits, like a trunk out of frame. */
 const PIVOT_OUTSET = 0.08;
+/** Breathing room around the shape when framing it. */
+const FRAME_MARGIN = 0.04;
+/** How much of the stem end to trim off, so it runs off the frame edge. */
+const STEM_TRIM = 0.03;
+
+const clamp01 = (v: number) => Math.min(Math.max(v, 0), 1);
+
+/**
+ * The part of the image to frame: the shape's outline plus a little margin.
+ * On the side it grows from, cut slightly short so the stem (or the edge it
+ * hangs from) runs off the screen instead of ending in mid-air.
+ */
+function frameFor(layout: ShapeLayout, stem: Edge | null): [number, number, number, number] {
+  const [x0, y0, x1, y1] = layout.bbox;
+  const mx = (x1 - x0) * FRAME_MARGIN;
+  const my = (y1 - y0) * FRAME_MARGIN;
+  let left = x0 - mx;
+  let top = y0 - my;
+  let right = x1 + mx;
+  let bottom = y1 + my;
+  if (stem === 'top') top = y0 + (y1 - y0) * STEM_TRIM;
+  if (stem === 'bottom') bottom = y1 - (y1 - y0) * STEM_TRIM;
+  if (stem === 'left') left = x0 + (x1 - x0) * STEM_TRIM;
+  if (stem === 'right') right = x1 - (x1 - x0) * STEM_TRIM;
+  left = clamp01(left);
+  top = clamp01(top);
+  right = clamp01(right);
+  bottom = clamp01(bottom);
+  // Never let a tiny shape produce a uselessly small frame.
+  if (right - left < 0.05) [left, right] = [clamp01((x0 + x1) / 2 - 0.025), clamp01((x0 + x1) / 2 + 0.025)];
+  if (bottom - top < 0.05) [top, bottom] = [clamp01((y0 + y1) / 2 - 0.025), clamp01((y0 + y1) / 2 + 0.025)];
+  return [left, top, right, bottom];
+}
 
 /** Build the scene (masks + motion) for the current options. */
-function buildScene(
-  st: CustomState,
-  aspect: number,
-  anchor: { edge: Edge; along: number } | null,
-): SceneConfig {
-  const levels = levelsFor(st.threshold);
+function buildScene(st: CustomState, aspect: number, layout: ShapeLayout): SceneConfig {
   const base = { aspect, leanAmount: 1 };
 
   if (st.motion === 'drift') {
+    // Patterns tile the whole image, so no framing crop.
     return {
       ...base,
       anchored: false,
@@ -82,41 +105,44 @@ function buildScene(
       align: [0.5, 0.5],
       origin: [0.5, 0.5],
       leanAxis: 'x',
-      layers: [layer('custom', { scale: 1.2, drift: [0.006, 0.002], wind: 0.6, flutter: 0.4, levels })],
+      layers: [layer('custom', { scale: 1.2, drift: [0.006, 0.002], wind: 0.6, flutter: 0.4 })],
     };
   }
 
   if (st.motion === 'still') {
+    const [x0, y0, x1, y1] = layout.bbox;
     return {
       ...base,
       anchored: true,
       sway: 0,
       wrap: 'extend',
+      crop: frameFor(layout, null),
       align: [0.5, 0.5],
-      origin: [0.5, 0.5],
+      origin: [(x0 + x1) / 2, (y0 + y1) / 2],
       leanAxis: 'x',
-      layers: [layer('custom', { flutter: 0.6, levels })],
+      layers: [layer('custom', { flutter: 0.6 })],
     };
   }
 
-  // Sway: pivot just outside the edge the shape is attached to.
-  const edge = st.anchor === 'auto' ? anchor?.edge : st.anchor;
-  const along = st.anchor === 'auto' && anchor ? anchor.along : 0.5;
-  const placements: Record<Edge, Pick<SceneConfig, 'origin' | 'align' | 'leanAxis'>> = {
-    top: { origin: [along, -PIVOT_OUTSET], align: [along, 0], leanAxis: 'x' },
-    bottom: { origin: [along, 1 + PIVOT_OUTSET], align: [along, 1], leanAxis: 'x' },
-    left: { origin: [-PIVOT_OUTSET, along], align: [0, along], leanAxis: 'y' },
-    right: { origin: [1 + PIVOT_OUTSET, along], align: [1, along], leanAxis: 'y' },
+  // Sway: pivot just beyond the side the shape grows from (the edge it's
+  // attached to, or the end of its stem), centered on the stem itself.
+  const edge = st.anchor === 'auto' ? (layout.anchor ?? likeliestStem(layout)) : st.anchor;
+  const side = layout.sides[edge];
+  const at = side.along;
+  const places: Record<Edge, Pick<SceneConfig, 'origin' | 'align' | 'leanAxis'>> = {
+    top: { origin: [at, side.outer - PIVOT_OUTSET], align: [0.5, 0], leanAxis: 'x' },
+    bottom: { origin: [at, side.outer + PIVOT_OUTSET], align: [0.5, 1], leanAxis: 'x' },
+    left: { origin: [side.outer - PIVOT_OUTSET, at], align: [0, 0.5], leanAxis: 'y' },
+    right: { origin: [side.outer + PIVOT_OUTSET, at], align: [1, 0.5], leanAxis: 'y' },
   };
-  // Not attached to any edge: hang it from a point above, like a mobile.
-  const place = edge ? placements[edge] : { origin: [0.5, -0.35] as [number, number], align: [0.5, 0.5] as [number, number], leanAxis: 'x' as const };
   return {
     ...base,
-    ...place,
+    ...places[edge],
     anchored: true,
     sway: 1,
     wrap: 'extend',
-    layers: [layer('custom', { flutter: 1, levels })],
+    crop: frameFor(layout, edge),
+    layers: [layer('custom', { flutter: 1 })],
   };
 }
 
@@ -128,10 +154,11 @@ export function createCustom(settings: Store, renderer: Renderer) {
   // Working data for the current upload (kept out of the store: it's big).
   let file: Blob | null = null;
   let source: SourceImage | null = null;
+  let raw: Uint8Array | null = null;
+  /** The thresholded mask the renderer blurs (see bakeThreshold). */
   let mask: MaskPixels | null = null;
   let hist: Uint32Array | null = null;
-  let anchor: ShapeLayout['anchor'] = null;
-  let pattern = false;
+  let layout: ShapeLayout | null = null;
 
   function warningFor(threshold: number): string {
     if (!hist) return '';
@@ -141,29 +168,41 @@ export function createCustom(settings: Store, renderer: Renderer) {
     return '';
   }
 
-  /** Recompute the mask from the source (new file, or invert changed). */
+  /** Recompute everything from the source (new file, or invert changed). */
   function analyse(invert: boolean, threshold?: number) {
     const src = source!;
-    const data = rawMask(src, invert);
-    hist = histogram(data);
+    raw = rawMask(src, invert);
+    hist = histogram(raw);
     const t = threshold ?? Math.round(autoThreshold(hist) * 100);
-    ({ anchor, pattern } = detectLayout(data, src.width, src.height, t / 100));
-    mask = { data, width: src.width, height: src.height };
+    layout = detectLayout(raw, src.width, src.height, t / 100);
+    mask = { data: bakeThreshold(raw, t / 100), width: src.width, height: src.height };
     return t;
   }
 
   function pushScene() {
-    const st = state.get();
-    if (!mask) return;
-    renderer.setCustom(mask, buildScene(st, mask.width / mask.height, anchor));
+    if (!mask || !layout) return;
+    renderer.setCustom(mask, buildScene(state.get(), mask.width / mask.height, layout));
   }
 
   function refreshPreview() {
     const st = state.get();
     if (!mask) return;
     state.set({
-      preview: maskPreview(mask.data, mask.width, mask.height, st.threshold / 100),
+      preview: maskPreview(mask.data, mask.width, mask.height),
       warning: warningFor(st.threshold),
+    });
+  }
+
+  // Threshold drags re-bake the mask at most once per frame.
+  let rebakeFrame = 0;
+  function rebake() {
+    if (rebakeFrame) return;
+    rebakeFrame = requestAnimationFrame(() => {
+      rebakeFrame = 0;
+      if (!raw || !mask) return;
+      bakeThreshold(raw, state.get().threshold / 100, mask.data);
+      renderer.updateCustomMask(mask);
+      refreshPreview();
     });
   }
 
@@ -194,15 +233,15 @@ export function createCustom(settings: Store, renderer: Renderer) {
     }
     file = next;
     const threshold = analyse(false);
-    // Smart default motion: a full-frame pattern → drift; attached to an
-    // edge → sway; a shape floating in the middle → still.
-    const motion: Motion = pattern ? 'drift' : anchor ? 'sway' : 'still';
+    // Smart default motion: a full-frame pattern → drift; grows from an edge
+    // or a stem (like trunks) → sway; a shape floating in the middle → still.
+    const motion: Motion = layout!.pattern ? 'drift' : layout!.anchor ? 'sway' : 'still';
     state.set({
       status: 'ready',
       name: next.name || 'Your image',
       motion,
       anchor: 'auto',
-      detected: anchor?.edge ?? null,
+      detected: layout!.anchor,
       threshold,
       invert: false,
       error: '',
@@ -220,10 +259,9 @@ export function createCustom(settings: Store, renderer: Renderer) {
     const shapeChanged = patch.motion !== undefined || patch.anchor !== undefined;
 
     if (patch.threshold !== undefined && !invertChanged && !shapeChanged) {
-      // Threshold alone: instant, no crossfade.
+      // Threshold alone: re-bake the mask in place, no crossfade.
       state.set({ threshold: patch.threshold });
-      renderer.setCustomLevels(levelsFor(patch.threshold));
-      refreshPreview();
+      rebake();
       persist();
       return;
     }
@@ -231,9 +269,10 @@ export function createCustom(settings: Store, renderer: Renderer) {
     if (invertChanged) {
       // Inverting changes which pixels are shape, so re-detect everything.
       const threshold = analyse(patch.invert!);
-      state.set({ invert: patch.invert, threshold, detected: anchor?.edge ?? null });
+      state.set({ invert: patch.invert, threshold, detected: layout!.anchor });
     } else if (patch.threshold !== undefined) {
       state.set({ threshold: patch.threshold });
+      if (raw && mask) bakeThreshold(raw, patch.threshold / 100, mask.data);
     }
     if (patch.motion) state.set({ motion: patch.motion });
     if (patch.anchor) state.set({ anchor: patch.anchor });
@@ -247,9 +286,8 @@ export function createCustom(settings: Store, renderer: Renderer) {
       transitionTo(settings, { preset: 'branch', ...presets.branch.settings });
     }
     renderer.clearCustom();
-    file = source = mask = hist = null;
-    anchor = null;
-    pattern = false;
+    file = source = mask = hist = raw = null;
+    layout = null;
     state.set(empty);
     forget();
   }
@@ -272,8 +310,8 @@ export function createCustom(settings: Store, renderer: Renderer) {
 
   /** The current upload as the snippet needs it: its scene and mask pixels. */
   function snapshot(): { scene: SceneConfig; mask: MaskPixels } | null {
-    if (!mask || state.get().status !== 'ready') return null;
-    return { scene: buildScene(state.get(), mask.width / mask.height, anchor), mask };
+    if (!mask || !layout || state.get().status !== 'ready') return null;
+    return { scene: buildScene(state.get(), mask.width / mask.height, layout), mask };
   }
 
   return { state, load, update, remove, restore, snapshot };

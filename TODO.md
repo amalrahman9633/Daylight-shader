@@ -56,6 +56,14 @@
   - UI: "+ Upload your own" tile (becomes "Your own" with thumbnail), "Your shadow" panel, drag-and-drop anywhere with drop overlay, friendly errors
   - Removed: Copy link, address-bar sync, `?embed` mode (`url.ts`, `ui/share.ts` deleted)
 
+- [x] Upload guide: "+ Upload your own" opens a `<dialog>` (`src/ui/upload-guide.ts`) with title, white-on-black guidance, the three preset masks as examples, tips, Cancel / Choose image. Drag-and-drop and Replace skip it
+
+- [x] Uploads now match presets (tested by uploading `branch-trees.png`: pivot (0.554, 0.948) vs preset (0.56, 0.95))
+  - Threshold is baked into the mask on the CPU *before* the shader blur (`bakeThreshold`), so Softness works on uploads; shader levels stay [0, 1]. Slider re-bakes once per frame via `renderer.updateCustomMask` (texSubImage2D, no crossfade)
+  - `detectLayout` returns the shape's bbox + per-side info; finds edge attachment, or a stem (side band where every line has shape but < 8% filled), e.g. tree trunks or a hanging stalk
+  - Custom Sway/Still scenes crop to the shape (+4% margin), stem side trimmed 3% so it runs off-frame; pivot 0.08 beyond the stem, centered on it
+  - Forced Sway on a floating shape uses the thinnest side, never "hang from above"
+
 ## Next
 - [ ] Owner to try a snippet on a real site (Webflow/Framer/WordPress embed blocks, plain HTML). Builders that insert HTML via innerHTML won't run scripts
 - [ ] Possible: strip GLSL comments from the player bundle (~5 KB smaller)
@@ -72,7 +80,8 @@
 - [x] Branch in wind now uses the owner's `branch-trees.png`. Pivot (0.56, 0.95) below the trunks; new scene `crop` [0, 0.15, 1, 0.84] (framing area) keeps trunks running off the bottom at every ratio
 - [x] Fixed: canvas flashed black while resizing (e.g. ratio animation). Resize observer now redraws synchronously
 - [x] Deleted unused originals (`branch.png`, `blinds.png`, `leaves-large/medium/small.png`) at the owner's request
-- [ ] Landing section with looping example previews + README
+- [ ] README
+- Landing page: dropped by the owner (2026-10-23), don't build
 
 ## Notes
 - `public/masks/make_masks*.py` will be copied into the build output because they live in `public/`. Consider moving them to a `tools/` folder.

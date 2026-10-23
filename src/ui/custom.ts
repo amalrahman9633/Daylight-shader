@@ -184,7 +184,9 @@ export function mountCustom(panel: HTMLElement, frame: HTMLElement, settings: St
     anchorField.hidden = st.motion !== 'sway';
     anchor.sync(st.anchor);
     const autoLabel = anchor.buttons[0].b;
-    autoLabel.title = st.detected ? `Automatic (found: ${st.detected} edge)` : 'Automatic (not attached to an edge)';
+    autoLabel.title = st.detected
+      ? `Automatic (grows from the ${st.detected})`
+      : 'Automatic (no clear stem or edge found)';
     threshold.value = String(st.threshold);
     threshold.style.setProperty('--fill', `${st.threshold}%`);
     tValue.textContent = String(st.threshold);
