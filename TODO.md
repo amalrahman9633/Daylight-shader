@@ -80,7 +80,7 @@
 - [x] Branch in wind now uses the owner's `branch-trees.png`. Pivot (0.56, 0.95) below the trunks; new scene `crop` [0, 0.15, 1, 0.84] (framing area) keeps trunks running off the bottom at every ratio
 - [x] Fixed: canvas flashed black while resizing (e.g. ratio animation). Resize observer now redraws synchronously
 - [x] Deleted unused originals (`branch.png`, `blinds.png`, `leaves-large/medium/small.png`) at the owner's request
-- [ ] README
+- [x] README.md (features, upload tips, Copy code, run locally, how it works, structure) + MIT LICENSE + docs/screenshot.jpg
 - Landing page: dropped by the owner (2026-10-23), don't build
 
 ## Notes
