@@ -7,7 +7,7 @@ export function mountPresets(
   container: HTMLElement,
   store: Store,
   custom: CustomController,
-  openPicker: () => void,
+  startUpload: () => void,
 ) {
   const section = document.createElement('div');
   section.className = 'presets';
@@ -42,7 +42,7 @@ export function mountPresets(
     if (custom.state.get().status === 'ready') {
       transitionTo(store, { ...store.get(), preset: 'custom' });
     } else {
-      openPicker();
+      startUpload();
     }
   });
   grid.append(own);

@@ -9,6 +9,7 @@ import { mountExport } from './ui/export';
 import { mountPresets } from './ui/presets';
 import { mountSheet } from './ui/sheet';
 import { mountThemeToggle } from './ui/theme';
+import { mountUploadGuide } from './ui/upload-guide';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -58,7 +59,9 @@ if (!gl) {
     });
     const custom = createCustom(store, renderer);
     const { openPicker } = mountCustom($('custom'), $('frame'), store, custom);
-    mountPresets($('presets'), store, custom, openPicker);
+    // The "Upload your own" tile shows a short guide before the file picker.
+    const guide = mountUploadGuide(openPicker);
+    mountPresets($('presets'), store, custom, guide.open);
     mountExport($('export'), store, view, renderer);
     mountCode($('code'), store, view, custom);
     custom.restore();
